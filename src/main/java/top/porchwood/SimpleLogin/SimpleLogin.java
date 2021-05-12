@@ -45,6 +45,7 @@ public class SimpleLogin {
     public static final String accountFoldPath = LPath.join(configFoldPath, "accounts");
     HashMap<String, IConfig> configs = new HashMap<>();
     String prefix;
+    private Timer makePlayerLoginTimer;
 
     public SimpleLogin() {
         MinecraftForge.EVENT_BUS.register(this);
@@ -65,7 +66,8 @@ public class SimpleLogin {
         if (!new File(configFoldPath).exists()) new File(configFoldPath).mkdir();
         if (!new File(accountFoldPath).exists()) new File(accountFoldPath).mkdir();
         loadConfig();
-        new Timer().schedule(MakePlayerLoginTimer(), 0, 1000);
+        makePlayerLoginTimer = new Timer();
+        makePlayerLoginTimer.schedule(MakePlayerLoginTimer(), 0, 1000);
     }
 
     private void loadConfig() {
@@ -81,9 +83,11 @@ public class SimpleLogin {
         logger.info("正在关闭SimpleLogin");
         for (UnloginPlayer unplayer : un_login_player.values()) {
             logger.info("正在保存玩家" + unplayer.player.getName().getString() + "的数据");
-            unplayer.player.inventory.dropAll();
+            //unplayer.player.inventory.dropAll();
             unplayer.player.inventory.load(unplayer.inventory);
         }
+        makePlayerLoginTimer.cancel();
+        un_login_player.clear();
     }
 
     //@SubscribeEvent
@@ -113,7 +117,7 @@ public class SimpleLogin {
                     return;
                 }
                 player.teleportTo(unloginPlayer.position.x, unloginPlayer.position.y, unloginPlayer.position.z);
-                player.inventory.dropAll();
+                //player.inventory.dropAll();
             }
         }, 0, 50);
     }
@@ -283,13 +287,17 @@ public class SimpleLogin {
     private void playerTryLogin(PlayerEntity player, String passward) {
         try {
             File file = new File(accountFoldPath, player.getStringUUID() + ".json");
+            if(!file.exists()) {
+                Str.sendToPlayer(player, prefix + "&c操作无效");
+                return;
+            }
             FileReader fr = new FileReader(file);
             char[] bytes = new char[(int) file.length()];
             fr.read(bytes);
             String s = new String(bytes);
             KeyValuePair kv = new Gson().fromJson(s, KeyValuePair.class);
             if (SHA256Utils.getSHA256(passward).equals(kv.getValue())) {
-                player.inventory.dropAll();
+                //player.inventory.dropAll();
                 player.inventory.load(un_login_player.get(player.getStringUUID()).inventory);
                 un_login_player.remove(player.getStringUUID());
                 Str.sendToPlayer(player, prefix + "&6登陆成功，请愉快的游戏吧～");
@@ -306,6 +314,10 @@ public class SimpleLogin {
     private void playerRegsiter(PlayerEntity player, String passward) {
         try {
             File file = new File(LPath.join(accountFoldPath, player.getStringUUID() + ".json"));
+            if(file.exists()) {
+                Str.sendToPlayer(player, prefix + "&c操作无效");
+                return;
+            }
             file.createNewFile();
             KeyValuePair kv = new KeyValuePair(player.getName().getString(), SHA256Utils.getSHA256(passward));
             String s = new Gson().toJson(kv);
